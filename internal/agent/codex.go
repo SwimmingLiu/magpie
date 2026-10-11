@@ -612,7 +612,9 @@ func codexIn(at place) *Agent {
 		if !withMagpie {
 			return own
 		}
-		return append(own, viaMagpieFor("codex", "")...)
+		// API mode may already offer codex/... as an own model; keep one
+		// gateway row while allowing an explicit multi-account route.
+		return append(own, viaMagpieFor("codex", "", own...)...)
 	}
 	// unroute takes magpie out as the way Codex reaches its models and puts
 	// back what the stash kept from before magpie was wired in (its

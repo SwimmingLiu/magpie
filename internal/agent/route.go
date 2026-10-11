@@ -70,12 +70,26 @@ func viaMagpie(agent, prefix string) []Option {
 	return append(groups, out...)
 }
 
-// viaMagpieFor is viaMagpie without the agent's own account: Codex CLI going
-// through magpie to its own ChatGPT login would only add a hop.
-func viaMagpieFor(agentID, prefix string) []Option {
+// viaMagpieFor skips the agent's own account unless Codex has two enabled
+// ChatGPT accounts: then the extra hop allows account routing, including
+// from CUSTOM or a disconnected agent. Listing never connects the agent.
+// Models already offered through magpie in own (Codex API mode) stay single.
+func viaMagpieFor(agentID, prefix string, own ...Option) []Option {
+	on := 0
+	if agentID == "codex" {
+		for _, l := range provider.Logins(agentID) {
+			if l.On && !l.Paused && l.Lapsed == "" {
+				on++
+			}
+		}
+	}
+	seen := make(map[string]bool, len(own))
+	for _, o := range own {
+		seen[o.Value] = true
+	}
 	var out []Option
 	for _, o := range viaMagpie(agentID, prefix) {
-		if !strings.HasPrefix(o.Value, prefix+agentID+"/") {
+		if !seen[o.Value] && (on >= 2 || !strings.HasPrefix(o.Value, prefix+agentID+"/")) {
 			out = append(out, o)
 		}
 	}
