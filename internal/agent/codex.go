@@ -1071,7 +1071,7 @@ func codexIn(at place) *Agent {
 				// magpie's settings, not Codex's config, since the gateway
 				// rewrites the subagent's request. Only a ChatGPT account's
 				// models are offered: a subagent's task is sealed for them
-				Key: "subagent_model", Label: "subagent model", Quiet: true,
+				Key: "subagent_model", Label: "subagent model", Quiet: true, GatewayOnly: true,
 				Get: provider.CodexSubagentModel,
 				Set: provider.SetCodexSubagentModel,
 				Options: func(map[string]string) []Option {

@@ -86,6 +86,9 @@ type Field struct {
 	// Quiet fields are left out of listings while empty: they follow
 	// another field until set (Claude Code's per-tier models).
 	Quiet bool
+	// GatewayOnly fields are stored in magpie for requests that reach it;
+	// setting one neither connects the agent nor proves its config is wired.
+	GatewayOnly bool
 	// Follows is the key of the field a Quiet one takes after while empty
 	// ("model" for Claude Code's tiers and subagents): a profile's details
 	// say so, and Drift reads the field as on that one's model (#1050).

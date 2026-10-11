@@ -13,7 +13,7 @@ something else shows up as drift.
 | Part | Responsibility | Source |
 | --- | --- | --- |
 | Agent description | `Agent` has an id, name, icon, `Bin` and `Dir` for detection, `Path`, `Fields` and `Native`. It also has optional hooks: `Notice`, `UA`, `ListsModels`, `Sync`, `Unwire`, `Join`/`Joined`, `Routed`, `Follow`, `RenameRefs`, `Check`, `LastUsed`, `Reached`, `Import`/`Added`, `Launch`, `SplitSuffix` and `Spelled`. Each hook's comment says which agents need it. | [`agent.go`](../../internal/agent/agent.go) |
-| Fields and options | A `Field` has `Get`, `Set` and `Options`. `Set("")` returns the field to the agent's default and takes magpie's wiring out. `Quiet` fields follow another field until set (`Follows`, such as Claude Code's tiers). An `Option` carries the picker's facts: `Direct`, `Via`, `Same`, `Alias`, `Rate` and `Context`. | [`agent.go`](../../internal/agent/agent.go), [`route.go`](../../internal/agent/route.go) |
+| Fields and options | A `Field` has `Get`, `Set` and `Options`. `Set("")` returns the field to the agent's default and takes magpie's wiring out. `Quiet` fields follow another field until set (`Follows`, such as Claude Code's tiers). `GatewayOnly` fields store request overrides in magpie: they do not connect an agent or establish wiring. An `Option` carries the picker's facts: `Direct`, `Via`, `Same`, `Alias`, `Rate` and `Context`. | [`agent.go`](../../internal/agent/agent.go), [`route.go`](../../internal/agent/route.go) |
 | The list of agents | `All` lists every agent magpie knows, then the WSL agents (`wslAgents`). `Clients` lists every agent whose requests the gateway knows by name, which `usage.Agents` reads. One file per agent: `claude.go`, `codex.go`, `opencode` in `agents.go`, and so on. | [`agents.go`](../../internal/agent/agents.go) |
 | Connect | `ConnectHow` picks the model an agent starts on and reports how. `How` is one of: `kept`, `again`, `joined`, `magpie`, `same`, `alike`, `default` or `first` (#726). With no models to give, it returns `NoModelsError` (code `no_models`). | [`applied.go`](../../internal/agent/applied.go) |
 | What magpie set | `Apply` sets a field and records it in `applied.json`. `Wired` says whether magpie is in the config. `Drift` reports `unwired`, `replaced`, `unreachable` or `bypassed`. `Reapply` sets the record again. `Keep` accepts the config as it is now. | [`applied.go`](../../internal/agent/applied.go) |
@@ -29,7 +29,7 @@ something else shows up as drift.
 ## Runtime path
 
 1. **Connect.** The Agents page's switch calls `ConnectHow` (`POST /api/agents/{action}/{id}` in [`internal/gui/api.go`](../../internal/gui/api.go)). It stashes the current values (`<id>.connect.was`). It brings back the models used before a switch-off (`reconnect`), or calls `Join` where the agent keeps its own model (Codex signed in with ChatGPT). Otherwise it picks a model by the order `ConnectHow` documents and sets it through `Apply`.
-2. **Pick.** `Pick` sets a field from the model picker. Picking one of magpie's models on an agent that isn't connected connects it first.
+2. **Pick.** `Pick` sets a field from the model picker. Picking one of magpie's models on an agent that isn't connected connects it first, except for a `GatewayOnly` field. The row's start button stays on the main `model` field even when that field has no magpie options; a gateway override never takes its place (`startField` in [`app.js`](../../internal/gui/assets/app.js)).
 3. **Notice.** After a change the page shows `Notice` when the agent reads its config only at start-up and needs a restart.
 4. **Drift.** As the Agents page is drawn, `Drift` compares the config with `applied.json`. It runs `Check` first, then each field. When the config is right and points at an address off loopback (a WSL twin under NAT, or this machine's Codex at an address the user kept, #816), it tries that address ([`reach.go`](../../internal/agent/reach.go)): in the background, at most every 20 s, never waited for. When nothing answers there while the gateway answers on loopback, the drift is `unreachable` (#1013), with what has to listen there: Share on local network, the user's portproxy, Windows' firewall. Then it checks whether the agent's latest use (`LastUsed`, `Reached`) reached the gateway.
 5. **Disconnect.** `Disconnect` puts back what the stash kept and forgets the record. It also marks the agent disconnected (`<id>.disconnected` in the stash, `Disconnected`) until the user connects it again (`connect`, or an `Apply` that leaves it wired): nothing magpie does by itself puts magpie back in meanwhile, neither a start's `Sync` nor Codex's account failover nor #701's magpie API wiring (paynezhuang on Discord: Codex had `openai_base_url` back after every update).
@@ -84,8 +84,10 @@ go test -tags nogui ./internal/agent -run '^TestAstrBot'
 go test -tags nogui ./internal/agent -run '^TestJcode'
 go test -tags nogui ./internal/agent -run '^TestPlugged'
 go test -tags nogui ./internal/agent -run 'TestCodexFailoverOnlyKeepsOwnModels|TestCodexOwnModelThroughMagpieWhileAccountsOn|TestCodexHandWrittenBaseURLStays'
+go test -tags nogui ./internal/agent -run '^TestCodexGatewayOverride'
 go test -tags nogui ./internal/agent -run 'TestDisconnectStaysThroughSync|TestCodexDisconnectStaysWithAccountsOn|TestCodexAPIDisconnectStays'
 go test -tags nogui ./internal/tune ./internal/agent -run 'TestCompact|TestCacheTTL|TestTune'
 node --test internal/gui/tests/context-tune.test.cjs
+node --test internal/gui/tests/codex-start-model-field.test.cjs
 node --test internal/gui/tests/agent-connect.test.cjs internal/gui/tests/agent-disconnect-preview.test.cjs internal/gui/tests/claude-signin.test.cjs internal/gui/tests/agent-failover.test.cjs internal/gui/tests/plugin-agent.test.cjs
 ```

@@ -157,6 +157,9 @@ func (a *Agent) Drift() *Drift {
 	// setting it again sets
 	on, onMagpie := a.Fields[0], false
 	for _, f := range a.Fields {
+		if f.GatewayOnly {
+			continue
+		}
 		if magpieValue(a, f, vals[f.Key], vals) {
 			on, onMagpie = f, true
 			break
@@ -172,6 +175,9 @@ func (a *Agent) Drift() *Drift {
 	// magpie's in its list (dsh's /model), not a change from outside
 	joined := a.Joined != nil && a.Joined()
 	for _, f := range a.Fields {
+		if f.GatewayOnly {
+			continue
+		}
 		want, ok := rec.Fields[f.Key]
 		// a field that reads empty while it follows another (Claude Code's
 		// tiers and subagents on its main model) runs on that one's model:
@@ -394,6 +400,9 @@ func (a *Agent) Wired() bool {
 	}
 	vals := a.Values()
 	for _, f := range a.Fields {
+		if f.GatewayOnly {
+			continue
+		}
 		if v := vals[f.Key]; v == magpieID || magpieValue(a, f, v, vals) || a.Routed != nil && setAsGroup(a.ID, f.Key, v) && a.Routed() {
 			return true
 		}
@@ -414,7 +423,7 @@ func (a *Agent) Pick(key, v string) error {
 		}
 		return a.Apply(key, value)
 	}
-	if f := a.Field(key); f != nil && !a.Wired() {
+	if f := a.Field(key); f != nil && !f.GatewayOnly && !a.Wired() {
 		vals := a.Values()
 		vals[key] = v
 		if v == magpieID || magpieValue(a, *f, v, vals) {
@@ -518,12 +527,15 @@ func (a *Agent) connect() (Connection, error) {
 	var opts []Option
 	for pass := 0; pass < 2 && f == nil; pass++ {
 		for i := range a.Fields {
-			if a.Fields[i].Options == nil {
+			if a.Fields[i].Options == nil || a.Fields[i].GatewayOnly {
 				continue
 			}
 			list := a.Fields[i].Options(vals)
 			for _, o := range list {
-				if pass == 0 && o.Ref != "" || pass == 1 && o.Value == magpieID {
+				// Codex's main picker spells its ChatGPT models as its own;
+				// they can still connect through magpie without a relay.
+				own := pass == 0 && a.Fields[i].Key == "model" && o.Ref == "" && a.OwnVia != nil && a.OwnVia(o.Value) != ""
+				if pass == 0 && (o.Ref != "" || own) || pass == 1 && o.Value == magpieID {
 					f, opts = &a.Fields[i], list
 					break
 				}
@@ -549,7 +561,8 @@ func (a *Agent) connect() (Connection, error) {
 	if cur == "" {
 		// on its default: the first of its own models
 		for _, o := range opts {
-			if o.Ref == "" && o.Group == a.Name && o.Value != magpieID {
+			own := a.OwnVia != nil && a.OwnVia(o.Value) != ""
+			if o.Ref == "" && (o.Group == a.Name || own) && o.Value != magpieID {
 				cur = connectWas(o.Value, opts)
 				break
 			}
