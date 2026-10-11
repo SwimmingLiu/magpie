@@ -50,6 +50,7 @@ function fixture() {
       }
       // the editor's Routing is made with its Save
       if (url.pathname === "/api/provider/save" && body.routing !== undefined) p.routing = body.routing;
+      if (url.pathname === "/api/keys/rename") p.keyList.find(k => k.id === body.ref).name = body.name;
       if (["/api/keys/use", "/api/login/switch"].includes(url.pathname)) {
         const first = body.ref || body.user;
         arrange(p, [first, ...items(p).map(item => id(p, item)).filter(ref => ref !== first)]);
@@ -160,6 +161,12 @@ for (const engine of (process.env.BROWSER ? [process.env.BROWSER] : ["chromium",
     // A name remains editable, and a single account needs no sort affordance.
     await page.locator(".accts .rename").first().click();
     await page.locator(".rename-in").waitFor(); await page.keyboard.press("Escape");
+    const renamed = f.posted.filter(p => p.action === "/api/keys/rename").length;
+    await page.locator(".accts .rename").first().click();
+    await page.locator(".rename-in").fill("Renamed key");
+    await page.locator(".rename-in").press("Enter");
+    await page.waitForFunction(() => document.querySelector(".accts .rename")?.textContent === "Renamed key");
+    assert.equal(f.posted.filter(p => p.action === "/api/keys/rename").length, renamed + 1, "Enter and its blur save the key name once");
     await page.evaluate(() => { providers.providers.find(p => p.id === "relay").keyList.length = 1; renderProviders(); });
     assert.equal(await page.locator(".accts").evaluate(r => r.classList.contains("reorderable")), false);
     // Account text selection must not turn into a drag.

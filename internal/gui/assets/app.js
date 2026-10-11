@@ -12647,7 +12647,12 @@ function renderKeyAccounts(p) {
     name.onclick = () => {
       const i = input(k.name, t("Name, e.g. Personal or Team"));
       i.className = "rename-in";
+      // Enter or Escape removes the focused input, which also fires blur.
+      // Finish once, as accountNameButton does, without a second redraw.
+      let over = false;
       const done = (save) => {
+        if (over) return;
+        over = true;
         if (save && i.value.trim() !== (k.name || "")) accountAction("keys/rename", { id: p.id, ref: k.id, name: i.value });
         else renderProviders();
       };
