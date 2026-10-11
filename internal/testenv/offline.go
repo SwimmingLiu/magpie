@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -14,7 +15,9 @@ import (
 // (and so http.DefaultClient, and every transport cloned from it after the
 // call) dials this computer only — localhost, a name under .localhost, a
 // loopback or unspecified address — and refuses anything else before it is
-// looked up, saying so on stderr once per address. A test that wants a
+// looked up, saying so on stderr once per address. Ambient proxy variables
+// are cleared before Go can cache them; a proxy on loopback cannot carry
+// a default client's request to an external host either. A test that wants a
 // vendor serves it on loopback and points the request there (an
 // httptest.Server, a Transport rewriting the host). Without it the tests
 // of internal/gateway and internal/provider asked the real models.dev (its
@@ -23,6 +26,7 @@ import (
 // plan key with a vendor's real base URL would have its windows read for
 // routing (#1016). A package calls it from its TestMain, before m.Run.
 func Offline() {
+	ClearProxy()
 	t, ok := http.DefaultTransport.(*http.Transport)
 	if !ok {
 		return
@@ -33,17 +37,30 @@ func Offline() {
 	}
 	var mu sync.Mutex
 	said := map[string]bool{}
-	t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-		if local(addr) {
-			return dial(ctx, network, addr)
-		}
+	refused := func(addr string) error {
 		mu.Lock()
 		if !said[addr] {
 			said[addr] = true
 			fmt.Fprintf(os.Stderr, "testenv: a test asked %s, refused: tests stay off the network\n", addr)
 		}
 		mu.Unlock()
-		return nil, fmt.Errorf("testenv: %s is not this computer; tests stay off the network", addr)
+		return fmt.Errorf("testenv: %s is not this computer; tests stay off the network", addr)
+	}
+	t.CloseIdleConnections()
+	if proxy := t.Proxy; proxy != nil {
+		t.Proxy = func(r *http.Request) (*url.URL, error) {
+			p, err := proxy(r)
+			if err == nil && p != nil && !local(r.URL.Host) {
+				return nil, refused(r.URL.Host)
+			}
+			return p, err
+		}
+	}
+	t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if local(addr) {
+			return dial(ctx, network, addr)
+		}
+		return nil, refused(addr)
 	}
 }
 

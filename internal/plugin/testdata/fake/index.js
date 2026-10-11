@@ -31,7 +31,13 @@ async function h2(origin, path) {
     const body = []
     req.on("response", (h) => (status = h[":status"]))
     req.on("data", (c) => body.push(c))
-    req.on("end", () => (s.close(), resolve(new Response(Buffer.concat(body), { status }))))
+    req.on("end", () => {
+      // Bun can end a failed stream before its error arrives. Let that
+      // error answer the request instead of constructing a status-0 reply.
+      if (!status) return
+      s.close()
+      resolve(new Response(Buffer.concat(body), { status }))
+    })
     req.end()
   })
 }

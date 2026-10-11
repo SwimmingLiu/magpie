@@ -29,7 +29,7 @@ func TestPluginModelListThroughAccountProxy(t *testing.T) {
 	// each proxy answers the vendor's list with a model of its own
 	proxyOf := func(name string) *httptest.Server {
 		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Host != "models.invalid" {
+			if r.URL.Hostname() != "models.invalid" || r.URL.Port() != "" && r.URL.Port() != "80" {
 				http.Error(w, "not the list: "+r.URL.String(), 400)
 				return
 			}

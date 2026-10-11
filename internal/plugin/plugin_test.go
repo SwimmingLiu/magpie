@@ -327,8 +327,14 @@ func TestPluginProxy(t *testing.T) {
 	var own, global []string // what each proxy was asked for
 	proxy := func(seen *[]string, answer string) *httptest.Server {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Explicit default ports name the same target. Keep every other
+			// part of the URL, including a non-default port, in the assertion.
+			u := *r.URL
+			if u.Scheme == "http" && u.Port() == "80" {
+				u.Host = u.Hostname()
+			}
 			mu.Lock()
-			*seen = append(*seen, r.URL.String())
+			*seen = append(*seen, u.String())
 			mu.Unlock()
 			fmt.Fprint(w, answer)
 		}))

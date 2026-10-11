@@ -108,7 +108,7 @@ func TestPluginSOCKSProxy(t *testing.T) {
 		b, err := io.ReadAll(res.Body)
 		return res.StatusCode, string(b), err
 	}
-	if _, b, err := fetch(socks, "http://vendor.invalid/v1/chat/completions"); err != nil || b != "vendor vendor.invalid" || carried.Load() != 1 {
+	if _, b, err := fetch(socks, "http://vendor.invalid/v1/chat/completions"); err != nil || strings.TrimSuffix(b, ":80") != "vendor vendor.invalid" || carried.Load() != 1 {
 		t.Fatalf("through the SOCKS proxy: %q, %v; it carried %d", b, err, carried.Load())
 	}
 	deadHTTP, deadSOCKS := "http://"+closedPort(t), "socks5://"+closedPort(t)
